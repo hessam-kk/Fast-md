@@ -1,0 +1,11 @@
+# Vendored libraries are content-stable — cache them hard.
+/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# App code should always be fresh after a deploy.
+/app/*
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/styles.css
+  Cache-Control: no-cache
