@@ -3,6 +3,13 @@
 // quality, ~1.3 GB). WebGPU when available, WASM fallback. Weights are
 // downloaded from the Hugging Face CDN on first use and then served from
 // the browser's cache — tracked in the model manifest.
+//
+// v4 note: the `image-text-to-text` pipeline task no longer exists, and the
+// surviving `image-to-text` pipeline sends no text prompt — useless for
+// instruction-tuned OCR. So we drive the model directly: tokenizer chat
+// template → processor(text, image) → model.generate → decode, which is
+// both the official example flow and the mirror of ocr-wrapper's Python
+// generate loop.
 import { renderPageJpeg } from './pdfjs.js';
 import { trackModelProgress } from './store.js';
 
@@ -24,8 +31,11 @@ export const VLM_DEFS = {
 const PROMPT =
   'Transcribe all text in this image exactly as it appears. Keep the original paragraph breaks. Output only the transcription.';
 
-let pipe = null;
-let pipeKey = '';
+let model = null;
+let tokenizer = null;
+let processor = null;
+let lib = null; // the transformers.js module, cached after first import
+let loadedRepo = '';
 let usedDevice = '';
 
 export function webgpuAvailable() {
@@ -33,29 +43,22 @@ export function webgpuAvailable() {
 }
 
 async function importTransformers() {
-  let mod;
+  let T;
   try {
-    mod = await import('@huggingface/transformers');
+    T = await import('@huggingface/transformers');
   } catch (error) {
     throw new Error(
       'Could not load the OCR runtime from the CDN — check your internet '
       + 'connection and reload. (' + (error?.message || error) + ')',
     );
   }
-  mod.env.allowLocalModels = false; // always resolve from the HF CDN
-  return mod;
+  T.env.allowLocalModels = false; // always resolve from the HF CDN
+  lib = T;
+  return T;
 }
 
-/** Load (or reuse) a VLM pipeline. Falls back to WASM when WebGPU fails. */
-export async function ensureVlm(defId, onStatus) {
-  if (pipe && pipeKey === defId) return pipe;
-  if (pipe) {
-    try { await pipe.dispose(); } catch { /* ignore */ }
-    pipe = null;
-  }
-  const def = VLM_DEFS[defId];
-  const { pipeline } = await importTransformers();
-  const progress = (event) => {
+function makeProgress(def, onStatus) {
+  return (event) => {
     trackModelProgress(def.repo, event);
     if (event.status === 'progress' && event.total) {
       onStatus?.({
@@ -65,6 +68,20 @@ export async function ensureVlm(defId, onStatus) {
       });
     }
   };
+}
+
+/** Load (or reuse) a VLM trio (tokenizer, processor, model). */
+export async function ensureVlm(defId, onStatus) {
+  if (model && loadedRepo === defId) return;
+  if (model) await disposeVlm();
+  const def = VLM_DEFS[defId];
+  const T = await importTransformers();
+  const progress = makeProgress(def, onStatus);
+
+  onStatus?.({ label: `Loading ${def.label} tokenizer` });
+  tokenizer = await T.AutoTokenizer.from_pretrained(def.repo, { progress_callback: progress });
+  processor = await T.AutoProcessor.from_pretrained(def.repo, { progress_callback: progress });
+
   const attempts = webgpuAvailable()
     ? [{ device: 'webgpu', dtype: def.dtype }, { device: 'wasm', dtype: 'q4' }]
     : [{ device: 'wasm', dtype: 'q4' }];
@@ -73,10 +90,13 @@ export async function ensureVlm(defId, onStatus) {
   for (const options of attempts) {
     try {
       onStatus?.({ label: `Loading ${def.label} (${options.device.toUpperCase()})` });
-      pipe = await pipeline('image-text-to-text', def.repo, { ...options, progress_callback: progress });
-      pipeKey = defId;
+      model = await T.AutoModelForImageTextToText.from_pretrained(def.repo, {
+        ...options,
+        progress_callback: progress,
+      });
+      loadedRepo = defId;
       usedDevice = options.device;
-      return pipe;
+      return;
     } catch (error) {
       lastError = error;
       console.warn(`[fast-md] ${def.label} failed on ${options.device}:`, error);
@@ -90,10 +110,12 @@ export function currentVlmDevice() {
 }
 
 export async function disposeVlm() {
-  if (!pipe) return;
-  try { await pipe.dispose(); } catch { /* ignore */ }
-  pipe = null;
-  pipeKey = '';
+  if (!model) return;
+  try { await model.dispose?.(); } catch { /* ignore */ }
+  model = null;
+  tokenizer = null;
+  processor = null;
+  loadedRepo = '';
 }
 
 function cleanVlmOutput(text) {
@@ -105,7 +127,7 @@ function cleanVlmOutput(text) {
 
 /** Transcribe pages with a VLM. cb.onPageDone(pageNo, markdown). */
 export async function runVlm(defId, doc, pageNumbers, { dpi = 200, maxNewTokens = 1024 }, cb) {
-  const generator = await ensureVlm(defId, cb.onStatus);
+  await ensureVlm(defId, cb.onStatus);
   cb.onReady?.({ device: usedDevice });
 
   for (const n of pageNumbers) {
@@ -113,22 +135,26 @@ export async function runVlm(defId, doc, pageNumbers, { dpi = 200, maxNewTokens 
     const page = await doc.getPage(n);
     const blob = await renderPageJpeg(page, dpi);
     page.cleanup();
-    const url = URL.createObjectURL(blob);
+
     let text = '';
-    try {
-      const messages = [{
-        role: 'user',
-        content: [
-          { type: 'image', image: url },
-          { type: 'text', text: PROMPT },
-        ],
-      }];
-      const output = await generator(messages, { max_new_tokens: maxNewTokens });
-      const gen = Array.isArray(output) ? output[0]?.generated_text : output?.generated_text;
-      text = typeof gen === 'string' ? gen : gen?.at(-1)?.content || '';
-    } finally {
-      URL.revokeObjectURL(url);
-    }
+    const image = await lib.RawImage.fromBlob(blob);
+    const conversation = [{
+      role: 'user',
+      content: [
+        { type: 'image' },
+        { type: 'text', text: PROMPT },
+      ],
+    }];
+    const promptText = tokenizer.apply_chat_template(conversation, {
+      add_generation_prompt: true,
+      tokenize: false,
+    });
+    const inputs = await processor(promptText, [image]);
+    const output = await model.generate({ ...inputs, max_new_tokens: maxNewTokens });
+    const promptLen = inputs.input_ids.dims.at(-1);
+    const generated = output.slice(null, [promptLen, null]);
+    const decoded = tokenizer.batch_decode(generated, { skip_special_tokens: true });
+    text = decoded[0] || '';
     cb.onPageDone(n, cleanVlmOutput(text));
   }
 }
