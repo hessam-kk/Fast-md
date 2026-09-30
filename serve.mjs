@@ -6,7 +6,9 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = fileURLToPath(new URL('./public', import.meta.url));
+// repo root = site root (trailing separator stripped so the guard below
+// compares clean prefixes)
+const ROOT = fileURLToPath(new URL('.', import.meta.url)).replace(/[\\/]+$/, '');
 const PORT = Number(process.argv[2]) || 8788;
 
 const MIME = {
@@ -25,6 +27,9 @@ const MIME = {
 http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
+    if (url.pathname.split('/').some((seg) => seg.startsWith('.') && seg !== '.' && seg !== '..')) {
+      throw Object.assign(new Error('forbidden'), { code: 'EACCES' });
+    }
     let path = normalize(join(ROOT, decodeURIComponent(url.pathname)));
     if (!path.startsWith(ROOT + sep) && path !== ROOT) throw Object.assign(new Error('forbidden'), { code: 'EACCES' });
     if (url.pathname.endsWith('/')) path = join(path, 'index.html');

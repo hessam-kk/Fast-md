@@ -6,13 +6,13 @@
   <title>fast·md — PDF → Markdown, entirely in your browser</title>
   <meta name="description" content="Convert PDFs to Markdown with in-browser OCR engines. Nothing uploads — files never leave your device, models cache locally." />
   <meta name="color-scheme" content="dark" />
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://huggingface.co" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="styles.css" />
   <script type="importmap">
     {
       "imports": {
@@ -24,11 +24,11 @@
       }
     }
   </script>
-  <script src="/vendor/tesseract/tesseract.min.js" defer></script>
+  <script src="vendor/tesseract/tesseract.min.js" defer></script>
 </head>
 <body>
   <header class="top">
-    <a class="brand display" href="/" aria-label="fast·md home">fast<span class="brand-dot">·</span>md</a>
+    <a class="brand display" href="./" aria-label="fast·md home">fast<span class="brand-dot">·</span>md</a>
     <div class="top-status">
       <span class="chip mono"><span class="dot dot--done"></span>100% local — files never leave this device</span>
       <span class="chip chip--device mono" id="gpuChip">WebGPU…</span>
@@ -188,6 +188,6 @@
 
   <div class="toasts" aria-live="polite"></div>
 
-  <script type="module" src="/app/main.js"></script>
+  <script type="module" src="app/main.js"></script>
 </body>
 </html>

@@ -43,35 +43,58 @@ official WebAssembly, plus light OCR and Bina-class vision-language OCR:
 node serve.mjs          # → http://localhost:8788
 ```
 
-No build step, no dependencies — `public/` is plain ES modules plus vendored
-libraries (`pdf.js`, `tesseract.js`, `marked`). transformers.js and model
-weights stream from CDNs on first use.
+No build step, no dependencies — the repo root **is** the site: plain ES
+modules plus vendored libraries (`pdf.js`, `tesseract.js`, `marked`,
+`pdf-inspector-wasm`). transformers.js and model weights stream from CDNs on
+first use.
 
-## Deploy to Cloudflare Pages (free tier)
+## Deploy
 
-Option A — dashboard:
+The site lives at the repository root, so both hosts pick it up with zero
+build configuration. All internal paths are relative, so it also works when
+served under a subpath.
 
-1. Push this folder to a Git repository (GitHub/GitLab).
-2. Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git**.
-3. Build command: *(none)* · Output directory: `public`.
+### GitHub Pages
+
+1. Push this repository to GitHub.
+2. Repo **Settings → Pages → Build and deployment → Deploy from a branch**,
+   branch `master`/`main`, folder `/ (root)`.
+3. Done — `https://<user>.github.io/<repo>/` (or the user site if the repo is
+   `<user>.github.io`). `.nojekyll` is included so GitHub serves `_headers`
+   and everything as-is.
+
+### Cloudflare Pages (free tier)
+
+The project `fast-md` → https://fast-md.pages.dev is deployed from the root.
+
+Option A — dashboard (Git integration):
+
+1. Cloudflare dashboard → **Workers & Pages → fast-md → Settings → Build**:
+   Build command *(none)*, output directory `/`.
 
 Option B — CLI:
 
 ```bash
-npx wrangler pages deploy public --project-name fast-md
+npx wrangler pages deploy . --project-name fast-md --branch main
 ```
 
-Everything is static; the free tier (unlimited requests, 100 MB/site,
-25 MB/file) is more than enough. `_headers` pins long caches for vendored
-libs. Model weights are **not** deployed — they're fetched client-side from
-the Hugging Face CDN and cached per visitor.
+`.assetsignore` documents the intended upload exclusions (legacy `pages
+deploy` currently ignores it and serves `README.md` / `serve.mjs` as plain
+files — harmless, they're public in the repo anyway; GitHub Pages serves
+them too). `_headers` pins long caches for vendored libs. Model weights are
+**not** deployed — they're fetched client-side from the Hugging Face CDN and
+cached per visitor.
 
 ## Layout
 
 ```
-public/
-├── index.html            # shell + import map
-├── styles.css            # design system (ink chrome, paper well, PDF-red accent)
+/                        ← repo root = site root
+├── index.html           # shell + import map
+├── styles.css           # design system (ink chrome, paper well, PDF-red accent)
+├── _headers             # Cloudflare Pages cache rules
+├── .nojekyll            # GitHub Pages: serve as-is, no Jekyll
+├── .assetsignore        # Cloudflare upload exclusions
+├── serve.mjs            # local dev server (not deployed)
 ├── app/
 │   ├── main.js           # orchestration: queue → engine → reel → result
 │   ├── engines.js        # engine registry + language list

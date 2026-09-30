@@ -1,0 +1,7 @@
+serve.mjs
+README.md
+.gitignore
+.assetsignore
+.nojekyll
+.wrangler/
+node_modules/

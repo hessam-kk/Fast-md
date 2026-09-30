@@ -8,7 +8,7 @@ const pending = new Map();
 
 function ensureWorker() {
   if (worker) return worker;
-  worker = new Worker('/app/inspector-worker.js', { type: 'module' });
+  worker = new Worker(new URL('./inspector-worker.js', import.meta.url), { type: 'module' });
   worker.onmessage = (event) => {
     const { id, ok, result, error } = event.data;
     const entry = pending.get(id);
