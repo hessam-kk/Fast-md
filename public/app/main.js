@@ -16,9 +16,10 @@ import { $, $$, el, toast, fmtBytes, fmtDuration, downloadText } from './ui.js';
 import { marked } from '../vendor/marked/marked.esm.js';
 
 const settings = loadSettings();
+let fileSeq = 0; // unique id per queued file — results link back to it
 const state = {
-  files: [],            // {file, name, size, status, pages, density, hint}
-  results: [],          // {name, md, rtl, pages, secs, pgps, engineName, device, chars}
+  files: [],            // {id, file, name, size, status, pages, density, hint}
+  results: [],          // {fileId, name, md, rtl, pages, secs, pgps, engineName, device, chars}
   activeResult: 0,
   engine: settings.engine,
   userPickedEngine: false,
@@ -100,7 +101,7 @@ async function addFiles(list) {
   const pdfs = [...list].filter((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
   if (!pdfs.length) { toast('Only PDF files, please', 'error'); return; }
   for (const file of pdfs) {
-    state.files.push({ file, name: file.name, size: file.size, status: 'ready', pages: 0, density: -1 });
+    state.files.push({ id: ++fileSeq, file, name: file.name, size: file.size, status: 'ready', pages: 0, density: -1 });
   }
   renderQueue();
   await probeLastFile();
@@ -157,6 +158,31 @@ function friendlyPdfError(error) {
   return error?.message || 'could not open';
 }
 
+/** Remove a queued file and everything that belongs to it (results included). */
+function removeFile(index) {
+  const [removed] = state.files.splice(index, 1);
+  if (!removed) return;
+  removed.removed = true; // a conversion in flight must not publish its result
+  const shown = state.results[state.activeResult];
+  state.results = state.results.filter((r) => r.fileId !== removed.id);
+  if (state.results.length) {
+    const at = state.results.indexOf(shown);
+    state.activeResult = at >= 0 ? at : state.results.length - 1;
+    renderResult();
+  } else {
+    state.activeResult = 0;
+    showEmptyStage();
+  }
+  renderQueue();
+  syncRunBar();
+}
+
+function showEmptyStage() {
+  $('#stageEmpty').classList.remove('is-hidden');
+  $('#stageRun').classList.add('is-hidden');
+  $('#stageResult').classList.add('is-hidden');
+}
+
 function renderQueue() {
   const list = $('#fileList');
   list.replaceChildren();
@@ -170,7 +196,7 @@ function renderQueue() {
       el('span', { class: 'file-meta mono' }, meta),
       el('button', {
         class: 'file-remove', type: 'button', 'aria-label': `Remove ${f.name}`,
-        onclick: () => { state.files.splice(i, 1); renderQueue(); syncRunBar(); },
+        onclick: () => removeFile(i),
       }, '×'),
     );
     list.append(item);
@@ -356,7 +382,9 @@ async function convertOne(entry) {
   const md = pagesToMarkdown(pageTexts, { rtl, normalize });
 
   const secs = (performance.now() - t0) / 1000;
+  if (entry.removed) return; // file was pulled mid-run — drop its output
   state.results.push({
+    fileId: entry.id,
     name: baseName(entry.name), md, rtl,
     pages: pageNumbers.length, secs,
     pgps: pageNumbers.length / Math.max(secs, 0.001),
