@@ -418,7 +418,7 @@ function paintResultBody(result) {
     body.className = 'well is-raw';
     body.replaceChildren(el('pre', {}, el('code', { text: result.md })));
   }
-  $$('#viewTabs .rtab').forEach((t) => t.classList.toggle('is-active', t.dataset.view === state.tab));
+  $$('#viewTabs .seg-btn').forEach((t) => t.classList.toggle('is-active', t.dataset.view === state.tab));
 }
 
 // ---------------------------------------------------------- storage panel --
@@ -501,7 +501,7 @@ function bindUI() {
   $('#stopBtn').addEventListener('click', () => { state.stopRequested = true; toast('Stopping after current page…'); });
 
   // view tabs
-  $$('#viewTabs .rtab').forEach((t) => t.addEventListener('click', () => {
+  $$('#viewTabs .seg-btn').forEach((t) => t.addEventListener('click', () => {
     state.tab = t.dataset.view;
     paintResultBody(state.results[state.activeResult]);
   }));
