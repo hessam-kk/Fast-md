@@ -401,12 +401,24 @@ input[type="range"] {
 
 /* --------------------------------------------------------------- runbar -- */
 
-.runbar {
+/* Convert lives at the top of the stage — same spot in every state, no
+   scrolling needed however long the options list gets. */
+.stage-bar {
+  position: sticky;
+  top: 58px;
+  z-index: 10;
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 0 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--ink-800);
+  background: rgba(13, 16, 19, 0.92);
+  backdrop-filter: blur(10px);
 }
+.stage-bar .runbar-count { margin-right: auto; }
+
+.runbar-count { font-size: 11px; color: var(--fog-500); }
 
 .btn {
   display: inline-flex;
