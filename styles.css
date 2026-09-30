@@ -807,3 +807,10 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* github star button + footer link */
+.btn--gh { border-color: var(--ink-600); }
+.btn--gh:hover { border-color: var(--fog-500); color: var(--fog-100); }
+.btn--gh svg { flex: none; }
+.foot-link { color: var(--fog-300); text-decoration: none; border-bottom: 1px dotted var(--ink-600); }
+.foot-link:hover { color: var(--fog-100); border-bottom-color: var(--red-line); }

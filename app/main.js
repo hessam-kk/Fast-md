@@ -609,6 +609,17 @@ function bindUI() {
   // header webgpu chip
   $('#gpuChip').textContent = webgpuAvailable() ? 'WebGPU ready' : 'No WebGPU — VLMs on CPU';
   $('#gpuChip').classList.toggle('is-off', !webgpuAvailable());
+
+  // live star count on the GitHub button — silent if the API is unreachable
+  fetch('https://api.github.com/repos/hessam-kk/Fast-md')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((repo) => {
+      if (typeof repo?.stargazers_count === 'number') {
+        const el = $('#ghStars');
+        if (el) el.textContent = `★ ${repo.stargazers_count}`;
+      }
+    })
+    .catch(() => {});
 }
 
 function boot() {
